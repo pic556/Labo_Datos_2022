@@ -1,0 +1,213 @@
+---
+title: "Trabajo práctico 4: Validación Cruzada"
+output: html_notebook
+---
+### Alumno:Pedro Joel Burgos
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(GGally)
+library(dplyr)
+library(caret)
+```
+
+```{r}
+datosTP5<-read.csv("datos_alquiler_crossvalidation.csv",stringsAsFactors = FALSE)
+t_pro<-datosTP5$property_type
+s_cub<-datosTP5$surface_covered
+s_tot<-datosTP5$surface_total
+c_hab<-datosTP5$rooms
+precio<-datosTP5$price
+a_m_f<-as.Date(datosTP5$start_date)
+u_lon<-datosTP5$lon
+u_lat<-datosTP5$lat
+d_fon<-datosTP5$fondo
+```
+
+## PUNTO 1
+```{r}
+MAE<-function(x_1,relacion_1,dataset){
+  ajuste_1<-lm(x_1~relacion_1,data=dataset) 
+  predichos_1<-predict(ajuste_1)
+  res1<-mean(abs(x_1-predichos_1))
+  return(res1)
+}
+
+MAE(precio,s_tot+d_fon,datosTP5)
+```
+## PUNTO 2
+```{r}
+PMAE<-function(x_2,relacion_2,dataset){
+  ajuste_2<-lm(x_2~relacion_2,data=dataset) 
+  predichos<-predict(ajuste_2)
+  res2<-mean(abs(x_2-predichos))/mean(x_2)
+  return(res2)
+}
+PMAE(precio,s_tot+d_fon,datosTP5)
+```
+## PUNTO 3
+```{r}
+MAE(precio,s_cub,datosTP5)
+PMAE(precio,s_cub,datosTP5)
+MAE(precio,s_cub+d_fon,datosTP5)
+PMAE(precio,s_cub+d_fon,datosTP5)
+```
+
+## PUNTO 4
+```{r , warning=FALSE}
+
+MAE_P3<-function(x,y){
+  res1<-mean(abs(x-y))
+  return(res1)
+}
+
+PMAE_P3<-function(x,y){
+  res1<-mean(abs(x-y))/mean(x)
+  return(res1)
+}
+
+crossval<-function(dataset, modelo, n_obs, fun_error, n_muestras){
+  modelo<-lm(modelo, data  = datosTP5)
+  errores_obtenidos<-c()
+  resultado_muestra<-c()
+    for(j in 1:n_muestras){
+    azar<-sample(1:nrow(dataset),nrow(dataset)-n_obs)
+    observacion_azar<-dataset[azar,]
+    ajustando<-lm(modelo,data = observacion_azar)
+    n_obs_excluidas<-dataset[setdiff(1:nrow(dataset),azar),]
+    predi<-predict(ajustando,n_obs_excluidas)
+    error_a_guarda<-fun_error(n_obs_excluidas$price,predi)
+    errores_obtenidos<-c(errores_obtenidos,error_a_guarda)
+    }
+  error_promedio_general<-mean(errores_obtenidos)
+  varianza_error<-var(errores_obtenidos)
+  resultados<-list("EO"=errores_obtenidos,
+  "V"=varianza_error,
+  "EPG"=error_promedio_general,
+  "M"=modelo)
+  return(resultados)
+}
+
+  
+
+```
+## PUNTO 5
+```{r,warning=FALSE}
+crossval(datosTP5,formula("precio~s_cub"),2,PMAE_P3,10)
+```
+#### Los errores obtenidos varian como mucho de 0.2653115 a 0.6118678 con una varianza de 0.01380235 y un promedio general de errores de 0.3567291
+
+## PUNTO 6
+```{r,warning=FALSE}
+a<-crossval(datosTP5,formula("precio~s_cub"),length(datosTP5),MAE_P3,100)
+b<-crossval(datosTP5,formula("precio~s_cub"),100,MAE_P3,100)
+c<-crossval(datosTP5,formula("precio~s_cub"),12,MAE_P3,100)
+d<-crossval(datosTP5,formula("precio~s_cub"),1,MAE_P3,100)
+plot(a[[1]],col="red",pch=16)
+plot(b[[1]],col="blue",pch=15)
+plot(c[[1]],col="green",pch=14)
+plot(d[[1]],col="orange",pch=14)
+
+```
+#### Nos indica que la cantidad de observaciones son como la cantidad de muestras a evaluar los errores obtenidos son siempre los mismo
+
+## PUNTO 7
+```{r,warning=FALSE}
+errores_obtenidos_7<-c()
+lista_vacia_7 <- list()
+for(i in 1:8){
+  modelo_7<-lm(precio~poly(d_fon,i), data = datosTP5)
+    for(j in 1:20){
+      azar_7<-sample(1:nrow(datosTP5),nrow(datosTP5)-length(datosTP5)*0.2)
+      observacion_azar_7<-datosTP5[azar_7,]
+      ajustando_7<-lm(modelo_7,data = observacion_azar_7)
+      n_obs_excluidas_7<-datosTP5[setdiff(1:nrow(datosTP5),azar_7),]
+      predi_7<-predict(ajustando_7,n_obs_excluidas_7)
+      error_a_guarda_7<-PMAE_P3(n_obs_excluidas_7$price,predi_7)
+      errores_obtenidos_7<-c(errores_obtenidos_7,error_a_guarda_7)
+    }
+    predi_7_v<-as.vector(predi_7)
+    error_promedio_general_7<-mean(errores_obtenidos_7)
+    hist(errores_obtenidos_7)
+    abline(v=error_promedio_general_7,col='red',lty='dashed')
+    abline(v=var(errores_obtenidos_7),col='blue',lty='dashed')
+    varianza_error_7<-var(errores_obtenidos_7)
+    resultados_7<-list("MeA"=min(errores_obtenidos_7),
+                       "MaA"=max(errores_obtenidos_7),
+                       "V"=varianza_error_7,
+                       "EPG"=error_promedio_general_7,
+                       "M"=modelo_7)
+    lista_vacia_7<-c(lista_vacia_7,resultados_7)
+}
+#View(lista_vacia_7)
+```
+#### El modelo con menor ajuste se vera en el grafico con el histograma donde salga lo marcado con rojo ya que tomamos la varianza que nos dice el ajuste y  con el mayor error de prediccion se puede ver con lo alto de las barras ,si queremos ver su promedio de prediccion es lo mismo con el menor ajuste pero en azul
+
+## PUNTO 8
+```{r,warning=FALSE}
+pun8a<-crossval(datosTP5,formula("precio~s_cub"),length(datosTP5),MAE_P3,100)
+pun8b<-crossval(datosTP5,formula("precio~d_fon"),length(datosTP5),MAE_P3,100)
+pun8c<-crossval(datosTP5,formula("precio~s_cub+d_fon"),length(datosTP5),MAE_P3,100)
+
+ej8a<-c(min(pun8a[[1]]),max(pun8a[[1]]),pun8a[[3]])
+ej8b<-c(min(pun8b[[1]]),max(pun8b[[1]]),pun8b[[3]])
+ej8c<-c(min(pun8c[[1]]),max(pun8c[[1]]),pun8c[[3]])
+
+ej8a
+ej8b
+ej8c
+```
+#### Podemos ver que el tiene menor error de predicion es el de fondo ,luego el superficie cubierta tiene un error de predicion menor que la suma de superficie cubierta mas el fondo pero es mayor este en algun caso.luego hablando del error de ajuste ,el maximo es cuando vemos superficie cubierta
+
+
+## PUNTO 9
+```{r,warning=FALSE}
+
+
+ubi<-u_lat+u_lon
+
+#tipo de propiedad ,fondo ,ubicacion ,superficie cubierta
+
+
+crossval2<-function(dataset, modelo, n_obs, fun_error, n_muestras){
+  errores_obtenidos<-c()
+  resultado_muestra<-c()
+    for(j in 1:n_muestras){
+    azar<-sample(1:nrow(dataset),nrow(dataset)-n_obs)
+    observacion_azar<-dataset[azar,]
+    ajustando<-lm(modelo,data = observacion_azar)
+    n_obs_excluidas<-dataset[setdiff(1:nrow(dataset),azar),]
+    predi<-predict(ajustando,n_obs_excluidas)
+    error_a_guarda<-fun_error(n_obs_excluidas$price,predi)
+    errores_obtenidos<-c(errores_obtenidos,error_a_guarda)
+    }
+  error_promedio_general<-mean(errores_obtenidos)
+  varianza_error<-var(errores_obtenidos)
+  resultados<-list("EO"=errores_obtenidos,
+  "V"=varianza_error,
+  "EPG"=error_promedio_general,
+  "M"=modelo)
+  return(resultados)
+}
+
+punto9<-c(s_cub~t_pro,s_cub~d_fon,s_cub~ubi,s_cub~s_cub,
+          t_pro~t_pro,t_pro~d_fon,t_pro~ubi,t_pro~s_cub,
+          ubi~t_pro,ubi~d_fon,ubi~ubi,ubi~s_cub,
+          d_fon~t_pro,d_fon~d_fon,d_fon~ubi,d_fon~s_cub)
+
+respromediogeneral<-c()
+reserrorajuste<-c()
+for (i in 1:16) {
+  modelo<-lm(formula(as.character(punto9[1])), data  = datosTP5)
+  respromediogeneral<-c(respromediogeneral,
+                        crossval2(datosTP5,modelo,length(datosTP5)*0.2,MAE_P3,20)[[2]])
+  reserrorajuste<-c(reserrorajuste,
+                    crossval2(datosTP5,modelo,length(datosTP5)*0.2,MAE_P3,20)[[3]])
+}
+respromediogeneral
+min(respromediogeneral)
+reserrorajuste
+```
+#### Segun esto el mejor modelo seria el de s_cub~t_pro y considero que a cuantas mas variable la predicion no mejora
+
+

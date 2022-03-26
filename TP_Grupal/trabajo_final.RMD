@@ -1,0 +1,361 @@
+---
+title: "Grupo 6"
+output: html_notebook
+---
+### Alumnos:
+#### Nicolas Alvarez
+#### Daiana Ailen Aranda 
+#### Pedro Joel Burgos
+
+### Librerias que vamos a usar
+
+```{r}
+datos <- read.csv('chicos.csv')
+library(dplyr)
+library(ggplot2)
+```
+
+## Funciones auxiliares
+
+```{r}
+MAE <- function(x,y) {
+  devolver <- abs(x-y)
+  return (round(sum(devolver)/length(x),3))
+}
+
+PMAE <- function(x,y) {
+  devolver <- abs(x-y)
+  return(round(sum(devolver)/sum(x), 3))
+}
+
+crossval <- function(datos, modelo, n_obs, fun_error, n_muestras=10) {
+  errores <- c()
+  for(i in 1:n_muestras){
+    azar <- sample(1:nrow(datos), nrow(datos)-n_obs)
+    observaciones <- datos[azar,]
+    model <- lm(modelo, data = observaciones)
+    excluidos <- datos[-azar,]
+    prediccion <- as.vector(predict(model, newdata = excluidos))
+    errores <- c(errores, fun_error(excluidos$AGE.IN.MONTHS, prediccion))
+  }
+  devolver <- list('Errores' = errores, 'Promedio errores' = round(mean(errores), 3), 'Varianza errores' = var(errores), 'Formula' = modelo, 'Modelo ajustado' = lm(modelo, data = datos))
+  return (devolver)
+}
+
+crossval_alt <- function(datos, modelo, n_obs, fun_error, n_muestras=10) {
+  errores <- c()
+  for(i in 1:n_muestras){
+    azar <- sample(1:nrow(datos), nrow(datos)-n_obs)
+    observaciones <- datos[azar,]
+    model <- lm(modelo, data = observaciones)
+    excluidos <- datos[-azar,]
+    prediccion <- as.vector(predict(model, newdata = excluidos))
+    errores <- c(errores, fun_error(excluidos$STATURE, prediccion))
+  }
+  devolver <- list('Errores' = errores, 'Promedio errores' = round(mean(errores), 3), 'Varianza errores' = var(errores), 'Formula' = modelo, 'Modelo ajustado' = lm(modelo, data = datos))
+  return (devolver)
+}
+```
+
+#### El PMAE mide el error entre los valores predichos y los reales, en terminos proporcionales.
+
+#### El cross-validation lo que hace es tomar un subconjunto del dataset para armar un modelo lineal y usar ese modelo para predecir los valores del resto del dataset.
+
+## Limpieza del dataset
+
+```{r, eval = FALSE}
+eliminar_peso <- which(datos$WEIGHT == 0) # Averiguo que filas del dataset tienen peso 0
+datos <- datos[setdiff(1:nrow(datos), eliminar_peso),] # Los elimino del dataset
+datos$WEIGHT <- datos$WEIGHT/10 # Asi estan en kilogramos
+eliminar_altura <- which(datos$STATURE == 0)
+datos <- datos[setdiff(1:nrow(datos), eliminar_altura),] 
+datos$STATURE <- datos$STATURE/10 # Asi estan en centimetros
+eliminar_raza <- which(datos$RACE == 0)
+datos <- datos[setdiff(1:nrow(datos), eliminar_raza),]
+# Eliminar los que tienen  mas de 18?
+eliminar_edad <- which(datos$AGE.IN.MONTHS >= 216)
+datos <- datos[setdiff(1:nrow(datos), eliminar_edad),]
+```
+
+```{r}
+# Con dplyr
+datos %>% filter(WEIGHT>0) %>% mutate(WEIGHT = WEIGHT/10) -> datos
+datos %>% filter(STATURE > 0) %>% mutate(STATURE = STATURE/10) -> datos
+datos %>% filter(RACE > 0) -> datos
+datos %>% filter(AGE.IN.MONTHS <216) -> datos
+```
+
+#### Como limpieza inicial del dataset, eliminamos los individuos con peso, edad y altura 0. Tambien sacamos a los que tienen raza 0, son muy pocos datos y las otras razas que no son blanco tambien tienen pocos datos como para reasignarle una raza.
+
+
+```{r}
+par(mfrow=c(3,2))
+hist(datos$WEIGHT, breaks = 30, ylab = 'Frecuencia', xlab = '', main = 'Peso en kilogramos')
+hist(datos$AGE.IN.MONTHS, breaks = 30, ylab = 'Frecuencia', xlab = '', main = 'Edad en meses')
+hist(datos$STATURE, breaks = 30, ylab = 'Frecuencia', xlab = '', main = 'Altura en centimetros')
+barplot(table(datos$SEX), names.arg = c('Varon', 'Mujer'), main = 'Por sexo')
+barplot(table(datos$RACE), names.arg = c('Blanco','Negro', 'Oriental', 'Indio a.', 'Mestizo'), main = 'Por raza')
+```
+
+#### Estos histogramas nos permiten visualizar como se distribuyen las variables obligatorias. Debido a la enorme cantidad de datos que pertenecen a la raza blanca y los pocos datos pertenecientes a las demas razas, decidimos no tenerlo en cuenta para los modelos.
+
+### Aca vamos a explorar que partes del cuerpo crecen mas rapido y mas lento
+
+#### Pregunta guia: ¿Que partes del cuerpo predicen mejor la edad? ¿Hay alguna diferencia en sexo y raza? ¿Hace alguna diferencia considerar el peso? (Las partes que crecen mas rapido no deberia haber diferencia si el peso no hace diferencia)
+
+### Primero, necesitamos el modelo mas basico, relacionar la edad con la altura, y ese va a ser nuestro parametro para comparar
+
+```{r}
+modelo_basico <- lm(AGE.IN.MONTHS~STATURE, datos)
+#
+summary(modelo_basico)
+# R cuadrado de 0.91
+error_basico <- PMAE(datos$AGE.IN.MONTHS, as.vector(predict(modelo_basico)))
+#
+error_basico
+# Error con PMAE: 0.09
+modelo_basico_S <- lm(AGE.IN.MONTHS~(STATURE+SEX), datos)
+summary(modelo_basico_S)
+# El sexo no mejora la prediccion con la edad.
+error_basico_S <- PMAE(datos$AGE.IN.MONTHS, as.vector(predict(modelo_basico_S)))
+#
+error_basico_S
+# La misma conclusion con PMAE
+cant_observaciones <- floor(0.2*nrow(datos))
+#
+cruzada_basico <- crossval(datos, formula('AGE.IN.MONTHS~STATURE'), cant_observaciones, PMAE)
+#
+cruzada_basico$`Promedio errores`
+# La validacion cruzada tambien da 0.09, es muy buena.
+```
+#### El modelo mas basico que vamos a considerar es relacionar la edad con la altura. El error de ajuste, calculado con PMAE, nos da 0.09. Podemos decir que es un muy buen modelo para predecir la edad en meses de los niños.
+
+### Graficos
+
+```{r}
+datos_sexo <- as_labeller(c(`1` = 'Varon', `2`= 'Mujer'))
+datos_raza <- as_labeller(c(`1`= 'Blanco', `2`= 'Negro', `3`= 'Oriental', `4`= 'Indio americano', `5`= 'Mestizo'))
+ggplot(datos, aes(y = AGE.IN.MONTHS, x = STATURE)) + geom_point() + labs(x = 'Altura', y = 'Edad en meses') + geom_smooth(method = 'lm')
+ggplot(datos, aes(y = AGE.IN.MONTHS, x = STATURE)) + geom_point() + facet_grid(col = vars(SEX), labeller = datos_sexo) + labs(x = 'Altura', y = 'Edad en meses')
+ggplot(datos, aes(y = AGE.IN.MONTHS, x = STATURE)) + geom_point() + facet_grid(col = vars(RACE), labeller = datos_raza) + labs(x = 'Altura', y = 'Edad en meses')
+# No vamos a ver la variable raza en analisis, porque hay muy pocos datos de otras razas.
+```
+#### Exploramos en graficos la relacion del modelo mas basico, que relaciona la edad en meses con la altura. Vemos que parece haber una relacion lineal entre ambas variables, aunque a partir del mes 125 aproximadamente los datos empiezan a dispersarse. Tambien vemos la diferencia en cantidad de datos de las distintas razas. Como consideramos que no hay suficientes datos de las otras razas para tener modelos razonables, no la vamos a considerar como variable en nuestros analisis.
+
+### Probamos lo que vimos en los graficos, si hay diferencia en la prediccion de la altura en menores de 125 meses y mayores
+
+```{r}
+datos %>% filter(AGE.IN.MONTHS <= 125) %>% lm(AGE.IN.MONTHS~STATURE,.) -> modelo_basico_1
+#
+datos %>% filter(AGE.IN.MONTHS <= 125) %>% crossval(formula('AGE.IN.MONTHS~STATURE'), cant_observaciones, PMAE) -> cruzada_basico_1
+#
+datos %>% filter(AGE.IN.MONTHS > 125) %>% lm(AGE.IN.MONTHS~STATURE,.) -> modelo_basico_2
+#
+datos %>% filter(AGE.IN.MONTHS > 125) %>% crossval(formula('AGE.IN.MONTHS~STATURE'), cant_observaciones, PMAE) -> cruzada_basico_2
+#
+datos %>% filter(AGE.IN.MONTHS > 125) %>% lm(AGE.IN.MONTHS~(STATURE+SEX),.) -> modelo_basico_3
+#
+summary(modelo_basico_1)
+# R cuadrado de 0.89
+cruzada_basico_1$`Promedio errores`
+#
+summary(modelo_basico_2)
+# R cuadrado de 0.55
+cruzada_basico_2$`Promedio errores`
+# Error PMAE 0.08. Buena capacidad predictiva.
+summary(modelo_basico_3)
+# R cuadrado de 0.56
+# Hay bastante diferencia entre menores de 125 meses y mayores de 125 meses.
+```
+#### Para discutir: la diferencia en el error de ajuste y error de validacion para el modelo mas simple en el caso de mayores a 125 meses.
+
+### Vemos la relacion entre la edad y el peso
+
+```{r}
+ggplot(datos, aes(x = WEIGHT, y = AGE.IN.MONTHS)) + geom_point() + geom_jitter() + labs(x = 'Peso', y = 'Edad en meses')
+modelo_peso <- lm(AGE.IN.MONTHS~WEIGHT, datos)
+summary(modelo_peso)
+error_peso <- PMAE(datos$AGE.IN.MONTHS, as.vector(predict(modelo_peso)))
+error_peso
+cant_observaciones <- floor(0.2*nrow(datos))
+cruzada_peso <- crossval(datos, formula('AGE.IN.MONTHS~WEIGHT'), cant_observaciones, PMAE)
+cruzada_peso
+```
+#### Hay relacion entre el peso y la edad, pero es mas debil que con la altura. El error de ajuste y de prediccion, medido con PMAE, dan muy similar, 0.149.
+
+
+```{r}
+datos$anio <- trunc(datos$AGE.IN.MONTHS/12)
+datos_varon <- datos %>% filter(SEX == 1)
+datos_mujer <- datos %>% filter(SEX == 2)
+
+datos_varon %>% group_by(anio) %>% summarise(mean(STATURE)) %>% plot(col = alpha('blue', 1), pch = 19, type = 'b', xlab = 'Año', ylab = 'Altura')
+datos_mujer %>% group_by(anio) %>% summarise(mean(STATURE)) %>% points(col = alpha('red', 1), pch = 19, type = 'b')
+legend('topleft', legend = c('Varon','Mujer'), col = c('blue', 'red'), pch = 19)
+```
+
+#### Ahora, como metodo auxiliar, vemos si la edad y altura permiten clasificar bien al sexo del sujeto.
+
+```{r}
+library(caret)
+library(class)
+train <- datos[,c('STATURE', 'WEIGHT','AGE.IN.MONTHS')]
+test <- datos[,c('STATURE', 'WEIGHT', 'AGE.IN.MONTHS')]
+labels_train <- datos[,'SEX']
+clasif_sexo <- knn(train = train, test = test, cl = labels_train, k = 3)
+summary(clasif_sexo)
+confusionMatrix(clasif_sexo, as.factor(labels_train))
+# Concluimos que usar la altura, el peso y la edad para predecir el sexo es bastante mas debil que usar la altura para predecir la edad. Para nuestros propositos, el sexo no va a ser una variable tan relevante.
+```
+
+#### Para nuestros propositos, vemos que la edad, el peso y la altura permiten clasificar a los sujetos de acuerdo a su sexo con una exactitud del 77%. Es decir, tiene un error del 23%. Si comparamos esta clasificacion con el error que habiamos obtenido al relacionar la edad con la altura, podriamos decir que esta clasificacion no es tan buena como nuestro modelo mas simple. Predecimos que el sexo no va a ser una variable relevante para nuestros propositos, aunque lo vamos a poner a prueba.
+
+
+### Empezamos con distintos modelos y variables:
+### Largo pie (86)
+
+```{r}
+datos %>% filter(FOOT.LENGTH > 0) %>% mutate(FOOT.LENGTH = FOOT.LENGTH/10) -> datos_pie
+ggplot(datos_pie, aes(x = FOOT.LENGTH, y = AGE.IN.MONTHS)) + geom_point() + labs(x = 'Largo del pie', y = 'Edad en meses') + theme_bw() + geom_smooth(method = lm)+ coord_cartesian(y = c(24,215))
+# Del grafico vemos que en edades iniales la edad y la longitud del pie estan muy relacionados, pero en edades mas grandes se dispersa. Suponemos que sera una buena variable predictora solo en edades iniciales. Punto de corte = 125 meses
+
+modelo_pie <- lm(AGE.IN.MONTHS~FOOT.LENGTH, datos_pie)
+#
+summary(modelo_pie)
+# R cuadrado de 0.82, es una buena relacion
+plot(residuals(modelo_pie)~datos_pie$AGE.IN.MONTHS, xlab = 'Edad en meses', ylab = 'Residuos') 
+# Este grafico va a ir una sola vez para ver el ruido
+cant_observaciones <- floor(0.2*nrow(datos_pie))
+cruzada_pie <- crossval(datos_pie, formula('AGE.IN.MONTHS~FOOT.LENGTH'), cant_observaciones, PMAE)
+#
+cruzada_pie$`Promedio errores`
+# El error de prediccion es de 0.13, que esta bastante bien
+PMAE(datos_pie$AGE.IN.MONTHS, as.vector(predict(modelo_pie)))
+# El error de ajuste con PMAE es igual al de prediccion
+modelo_pie_altura <- lm(AGE.IN.MONTHS~(FOOT.LENGTH+STATURE), datos_pie)
+summary(modelo_pie_altura)
+#Mejora la relacion a 0.92
+modelo_pie_ES <- lm(STATURE~FOOT.LENGTH, datos_pie)
+summary(modelo_pie_ES)
+# Pensamos que el modelo es tan bueno porque el pie esta muy relacionado con la altura. R cuadrado = 0.93
+```
+#### Esta es una buena variable que se explica principalmente por su relacion con la altura.
+
+### Circunferencia de la muñeca (45)
+```{r}
+datos %>% filter(WRIST.CIRCUMFERENCE > 0) %>% mutate(WRIST.CIRCUMFERENCE = WRIST.CIRCUMFERENCE/10) -> datos_muñeca
+ggplot(datos_muñeca, aes(x = WRIST.CIRCUMFERENCE, y = AGE.IN.MONTHS)) + geom_point() + geom_jitter() + labs(x = 'Circunferencia de la muñeca', y = 'Edad en meses') + geom_smooth(method = lm)+ coord_cartesian(y = c(24,215))
+#
+modelo_muñeca <- lm(AGE.IN.MONTHS~WRIST.CIRCUMFERENCE, datos_muñeca)
+summary(modelo_muñeca)
+# Tiene un R cuadrado de 0.63, no es tan buen modelo
+modelo_muñeca_S <- lm(AGE.IN.MONTHS~(WRIST.CIRCUMFERENCE+SEX), datos_muñeca)
+summary(modelo_muñeca_S)
+# No cambia mucho realmente
+modelo_muñeca_ES <- lm(STATURE~WRIST.CIRCUMFERENCE, datos_muñeca)
+summary(modelo_muñeca_ES)
+# Mejora un poco
+modelo_muñeca_W <- lm(WEIGHT~WRIST.CIRCUMFERENCE, datos_muñeca)
+summary(modelo_muñeca)
+# Es similar a la relacion con altura
+cant_observaciones <- floor(0.2*nrow(datos_muñeca))
+error_muñeca <- PMAE(datos_muñeca$AGE.IN.MONTHS, as.vector(predict(modelo_muñeca)))
+error_muñeca
+# Con PMAE da 0.20, que es mas alto pero no es comparable al R cuadrado.
+cant_observaciones <- floor(0.2*nrow(datos_muñeca))
+cruzada_muñeca <- crossval(datos_muñeca, formula('AGE.IN.MONTHS~WRIST.CIRCUMFERENCE'), cant_observaciones, PMAE, 1000)
+#cruzada_muñeca
+```
+
+####De esta variable vamos a decir que no es tan buena predictora de la edad, y tampoco esta muy relacionada al peso ni a la altura.
+
+
+### Amplitud máxima de cadera (sentado) 11
+```{r}
+datos %>% filter(MAXIMUM.HIP.BREADTH..SEATED.> 0) %>% mutate(MAXIMUM.HIP.BREADTH..SEATED. = MAXIMUM.HIP.BREADTH..SEATED./10)-> datos_caderasentado
+ggplot(datos_caderasentado, aes(x = MAXIMUM.HIP.BREADTH..SEATED., y = AGE.IN.MONTHS)) + geom_point() + geom_jitter() + labs(x = 'Amplitud de la cadera sentado', y = 'Edad en meses')+ geom_smooth(method = lm)+ coord_cartesian(y = c(24,215))
+
+modelo_caderasentado <- lm(AGE.IN.MONTHS~MAXIMUM.HIP.BREADTH..SEATED., datos_caderasentado)
+#
+modelo_caderasentado_S <- lm(AGE.IN.MONTHS~MAXIMUM.HIP.BREADTH..SEATED.+SEX, datos_caderasentado)
+#
+modelo_caderasentado_P <- lm(AGE.IN.MONTHS~MAXIMUM.HIP.BREADTH..SEATED.+WEIGHT, datos_caderasentado)
+#
+modelo_caderasentado_ES <- lm(STATURE~MAXIMUM.HIP.BREADTH..SEATED., datos_caderasentado)
+#
+summary(modelo_caderasentado)
+#buen modelo, R cuadrado = 0.80
+cant_observaciones <- floor(0.2*nrow(datos_caderasentado))
+cruzada_caderasentado <- crossval(datos_muñeca, formula('AGE.IN.MONTHS~MAXIMUM.HIP.BREADTH..SEATED.'), cant_observaciones, PMAE)
+cruzada_caderasentado
+error_caderasentado <- PMAE(datos_caderasentado$AGE.IN.MONTHS, as.vector(predict(modelo_caderasentado)))
+error_caderasentado
+# El error de prediccion es de 0.21. Es bastante alto. 
+summary(modelo_caderasentado_S)
+#no cambia mucho
+summary(modelo_caderasentado_P)
+#Aumenta un poco
+summary(modelo_caderasentado_ES)
+#buena relacion con la altura
+#Para hacer: crossval con la altura
+altura_caderasentado <- crossval_alt(datos_caderasentado, formula('STATURE~MAXIMUM.HIP.BREADTH..SEATED.'), cant_observaciones, PMAE)
+altura_caderasentado
+# Error de validacion cruzada con altura de 0.05. Es mejor para predecir la edad.
+```
+####Para hablar de una variable que este mas relacionada con la altura. Error de ajuste con PMAE: 0.14. Error de prediccion: 0.21
+
+### Circunferencia de la cadera (68)
+```{r}
+datos %>% filter(NATURAL.WAIST.CIRCUMFERENCE > 0) %>% mutate(NATURAL.WAIST.CIRCUMFERENCE = NATURAL.WAIST.CIRCUMFERENCE/10)-> datos_circunferenciacadera
+ggplot(datos_circunferenciacadera, aes(x = NATURAL.WAIST.CIRCUMFERENCE, y = AGE.IN.MONTHS)) + geom_point() + geom_jitter() + labs(x = 'Circunferencia de la cadera', y = 'Edad en meses')+ geom_smooth(method = lm) + coord_cartesian(y = c(24,215))
+#
+modelo_circunferenciacadera <- lm(AGE.IN.MONTHS~NATURAL.WAIST.CIRCUMFERENCE, datos_circunferenciacadera)
+#
+modelo_circunferenciacadera_S <- lm(AGE.IN.MONTHS~(NATURAL.WAIST.CIRCUMFERENCE+SEX), datos_circunferenciacadera)
+#
+modelo_circunferenciacadera_P <- lm(AGE.IN.MONTHS~(NATURAL.WAIST.CIRCUMFERENCE+WEIGHT), datos_circunferenciacadera)
+#
+modelo_circunferenciacadera_ES <- lm(STATURE~NATURAL.WAIST.CIRCUMFERENCE, datos_circunferenciacadera)
+#
+modelo_circunferenciacadera_W <- lm(WEIGHT~NATURAL.WAIST.CIRCUMFERENCE, datos_circunferenciacadera)
+#
+summary(modelo_circunferenciacadera)
+# Tiene un r cuadrado de 0.60, hay mejores variables predictoras
+summary(modelo_circunferenciacadera_S)
+# Mejora un 0.03, no es mucho
+summary(modelo_circunferenciacadera_P)
+# Mejora bastante, no es de extrañar
+summary(modelo_circunferenciacadera_ES)
+# No hay tanta relacion como en otros casos, lo cual se veia reflejado en el grafico. No llega a 0,90
+summary(modelo_circunferenciacadera_W)
+# Hay más relacion con el peso que con la altura.
+# Este podria ser, porque esta mas relacionado con el peso que con la altura.
+error_circunferenciacadera <- PMAE(datos_circunferenciacadera$AGE.IN.MONTHS, as.vector(predict(modelo_circunferenciacadera)))
+error_circunferenciacadera
+cant_observaciones <- floor(0.2*nrow(datos_caderasentado))
+cruzada_circunferenciacadera <- crossval(datos_circunferenciacadera, formula('AGE.IN.MONTHS~NATURAL.WAIST.CIRCUMFERENCE'), cant_observaciones, PMAE)
+cruzada_circunferenciacadera
+```
+#### De este modelo vamos a hablar que esta mas relacionado con el peso que con la altura. Error de ajuste: 0.20. Error de prediccion: 0.21
+
+### Veamos el centro de gravedad
+```{r}
+datos %>% filter(STANDING.CENTER.OF.GRAVITY > 0) -> datos_gravedad
+ggplot(datos_gravedad, aes(x = STANDING.CENTER.OF.GRAVITY, y = STATURE)) + geom_point() + geom_jitter() + labs(x = 'Centro de gravedad',y = 'Edad en meses')+ geom_smooth(method = lm)
+# De aca lo que vemos es que, en el fondo, el centro de gravedad y la altura estan midiendo lo mismo.
+# Este es un muy buen grafico para mostrar al final.
+```
+#### Una relacion casi perfecta eso implica cierta desconfianza
+
+### Conclusiones
+
+#### Primer punto: lo que nosotros quisimos modelar, la edad en meses en funcion de distintas variables del cuerpo, esta mediado por el crecimiento, que afecta a todas las partes del cuerpo aunque no por igual, como pudimos ver. Sin embargo, esta relacion se hace mas debil a partir de los 125 meses.
+#### Segundo: creemos que es el crecimiento la variable que explica la prediccion con la altura.
+#### Tercer punto: el dataset tenia muchos datos faltantes.
+#### Cuarto: nos resulta raro que el sexo no haya sido una variable relevante, sobre todo con la altura. 
+#### Quinto: el peso no es una variable tan relevante a la hora de predecir la edad en comparacion con la altura. Probablemente haya mas variaciones individuales
+
+
+
+
+

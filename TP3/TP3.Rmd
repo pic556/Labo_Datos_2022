@@ -1,0 +1,97 @@
+---
+title: "TP3"
+output: html_notebook
+autor: "Pedro Joel Burgos"
+---
+### Alumno: Pedro Joel Burgos
+# Modelado lineal
+
+#### Librerias que vamos a usar
+```{r}
+
+library(ggplot2)
+library(GGally)
+library(dplyr)
+```
+
+
+## PUNTO 1
+```{r}
+
+datosTP3<-read.csv("datos_alquiler.csv",stringsAsFactors = FALSE)
+
+tipo_propiedad<-datosTP3$property_type
+cantidad_ambientes<-datosTP3$rooms
+superficie_cubierta<-datosTP3$surface_covered
+fondos<-datosTP3$fondo
+precios<-datosTP3$price
+ubicacion_long<-datosTP3$lon
+ubicacion_lat<-datosTP3$lat
+ano_Mes_fecha<-as.Date(datosTP3$start_date)
+semanas<-weekdays(ano_Mes_fecha)
+meses<-months(ano_Mes_fecha)
+dias_del_mes<-format(ano_Mes_fecha, format ="%d")
+
+ggplot(datosTP3,aes(x=dias_del_mes))+geom_bar()
+ggplot(datosTP3,aes(x=semanas))+geom_bar()
+```
+#### Hay dias donde se publica mas que otros durante la semana , principalmente los viernes ,en los dias del mes solo podemos decir que el 10 se publica mas
+
+## PUNTO 2
+```{r}
+modelo_punto2<-lm(precios~1, data = datosTP3)
+plot(precios)
+mtext("Indices", side = 1, adj = 0)
+abline(modelo_punto2,col="green")
+```
+#### Como pide variable constante use una relacion precio con el 1, y lo que hace esa relacion representada en el abline es que predice como va hacer el precio a lo largo del tiempo viendo en una variable constante
+
+## PUNTO 3
+```{r}
+relacion_punto_3_a<-select(datosTP3,price,surface_covered,fondo)
+relacion_punto_3_b<-select(datosTP3,price,start_date)
+relacion_punto_3_b$start_date<-as.Date(relacion_punto_3_b$start_date)
+
+ggpairs(relacion_punto_3_a)
+ggpairs(relacion_punto_3_b)
+```
+#### El precio se relaciona con la superficie ya que con mayor precio hay mayor superficie cubierta y menor fondo ,despues en tema de fechasque en abril se llega al precio mas alto
+
+## PUNTO 4
+```{r}
+modelo_punto4<-lm(precios~superficie_cubierta, data = datosTP3)
+plot(modelo_punto4)
+```
+#### a)Los residuos "residuals vs fitted" se quiere observar si hay patrones lineales o no ,por lo consecuente se forma una linea prediciendo un supuesto patron o un intento de esto muy asegurado.osea es un buen modelo
+
+
+#### b)en "Scale-location" muestra si la distribucion de los punto fue justa y vemos que la mayoria cubren una zona luego se difumina un poco pero la distribucion dentro de todo es justa ,no es igual en todos los rangos pero se acerca
+
+
+## PUNTO 5
+```{r}
+modelo_punto5<-lm(precios~ano_Mes_fecha, data = datosTP3)
+plot(modelo_punto5)
+```
+#### Viendo residuals vs fitted puedo llegar a predecir que el precio va air aumentando osea si se puede ver la inflacion
+
+## PUNTO 6
+```{r}
+modelo_punto6<-lm(precios~tipo_propiedad, data = datosTP3)
+plot(modelo_punto6)
+boxplot(precios~tipo_propiedad)
+```
+#### Los coeficiente representan cada caja ,linea separada ,osea hay 3 lineas en residulas vs fitted,scated location  y residuals vs lavarage ,aparte de boxplot donde no se tocan xq cada una es su propio producto y no se pueden graficar de una manera mejor visible que graficos de otros puntos
+
+## PUNTO 7
+```{r}
+modelo_puntoa<-lm(precios~fondos+cantidad_ambientes+ubicacion_long, data = datosTP3)
+modelo_puntob<-lm(precios~cantidad_ambientes+ubicacion_long, data = datosTP3)
+
+
+plot(modelo_puntoa$residuals,col="red",pch=16)
+points(modelo_puntob$residuals,col="blue",pch=15)
+```
+#### Con estos 2 a comparar el modelo que tiene menos errores es el azul xq es el que sobrepasa mayormente al rojo ,sabiendo que lm es para ver cuanto es el porcentaje de error me puedo dar una idea matematica de esto mas lo visual, al tener mas variable implica tener mas capacidad de errores
+
+

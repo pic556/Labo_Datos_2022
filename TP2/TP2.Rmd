@@ -1,0 +1,258 @@
+---
+title: "TP2"
+output: html_notebook
+---
+# Trabajo práctico 2: Estadística Descriptiva
+
+Alumno:Pedro Joel Burgos
+```{r}
+install.packages("scales")
+library(scales)
+#agrego estas librerias para mas adelante
+```
+
+## Parte 1
+
+### Punto 1
+
+```{r}
+
+datosTP2<-read.csv("ar_properties.csv",stringsAsFactors = FALSE)
+datosTP2_barrios <- datosTP2[datosTP2$l3 =="Boedo" | datosTP2$l3 =="Colegiales" |datosTP2$l3 =="Centro / Microcentro" | datosTP2$l3=="Mataderos" |datosTP2$l3=="Puerto Madero",]
+#Construyo el dataset pedido.
+
+#por la existencia de algunos NAs lo que es hago es hacer que el dataset elimine los datafranes faltantes
+indices <- !is.na(datosTP2_barrios$surface_total) & !is.na(datosTP2_barrios$surface_covered) & !is.na(datosTP2_barrios$rooms)
+datosTP2_barrios <- datosTP2_barrios[indices,]
+
+#Me fijo si tienen algun NA
+any(is.na(datosTP2_barrios$surface_total))
+any(is.na(datosTP2_barrios$surface_covered))
+any(is.na(datosTP2_barrios$rooms))
+#Veo cuantas propiedades tiene cada barrio
+length(datosTP2_barrios[datosTP2_barrios$l3 == "Boedo",]$property_type)
+length(datosTP2_barrios[datosTP2_barrios$l3 == "Colegiales",]$property_type)
+length(datosTP2_barrios[datosTP2_barrios$l3 == "Centro / Microcentro",]$property_type)
+length(datosTP2_barrios[datosTP2_barrios$l3 == "Mataderos",]$property_type)
+length(datosTP2_barrios[datosTP2_barrios$l3 == "Puerto Madero",]$property_type)
+```
+### Punto 2
+```{r}
+sup_total_boedo<-datosTP2_barrios[datosTP2_barrios$l3 == "Boedo",]$surface_total
+habi_boedo<-datosTP2_barrios[datosTP2_barrios$l3 == "Boedo",]$rooms
+hist(sup_total_boedo,breaks=seq(min(sup_total_boedo),max(sup_total_boedo)+25,25),xlim=c(0,5000))
+barplot(sort(prop.table(table(habi_boedo)),decreasing=TRUE))
+```
+Viendo el histograma de la superficie total tienden a ser mas frecuente que aparezca con valores menores a 1000 y "cerca" del 0,sin mencionar a una o unas cuantas superficies que superan el 4000 de largo y en el barplot de habitaciones suele ser mas comun que haya 2.
+
+```{r}
+sup_total_colegiales<-datosTP2_barrios[datosTP2_barrios$l3 == "Colegiales",]$surface_total
+habi_colegiales<-datosTP2_barrios[datosTP2_barrios$l3 == "Colegiales",]$rooms
+hist(sup_total_colegiales,breaks=seq(min(sup_total_colegiales),max(sup_total_colegiales)+25,25),xlim=c(0,5000))
+barplot(sort(prop.table(table(habi_colegiales)),decreasing=TRUE))
+```
+A diferencia de Boedo en superficie total es muy similar solo que no hay ninguna superficie que supere los 1000 y en caso de habitaciones las de 11 aca serian las menos frecuente a diferencias de las de 18 de Boedo
+
+```{r}
+sup_total_cen_mic<-datosTP2_barrios[datosTP2_barrios$l3 == "Centro / Microcentro",]$surface_total
+habi_cen_mic<-datosTP2_barrios[datosTP2_barrios$l3 == "Centro / Microcentro",]$rooms
+hist(sup_total_cen_mic,breaks=seq(min(sup_total_cen_mic),max(sup_total_cen_mic)+25,25),xlim=c(0,5000))
+barplot(sort(prop.table(table(habi_cen_mic)),decreasing=TRUE))
+```
+Caso curioso aca que de 1000 para adelante aparezca una superficies aunque no sean frencuentes y que solo 1 habitacion sean la mas frencuente a diferencia de las 2 de boedo y colegiales
+```{r}
+sup_total_mataderos<-datosTP2_barrios[datosTP2_barrios$l3 == "Mataderos",]$surface_total
+habi_mataderos<-datosTP2_barrios[datosTP2_barrios$l3 == "Mataderos",]$rooms
+hist(sup_total_mataderos,breaks=seq(min(sup_total_mataderos),max(sup_total_mataderos)+25,25),xlim=c(0,5000))
+barplot(sort(prop.table(table(habi_mataderos)),decreasing=TRUE))
+```
+En temas de superficie no difere tanto de los demas y no presenta superficie mas alla de 1000 ,aunque aca las 3 habitaciones son lo mas frecuentes.
+
+```{r}
+sup_total_puerto_madero<-datosTP2_barrios[datosTP2_barrios$l3 == "Puerto Madero",]$surface_total
+habi_puerto_madero<-datosTP2_barrios[datosTP2_barrios$l3 == "Puerto Madero",]$rooms
+hist(sup_total_puerto_madero,breaks=seq(min(sup_total_puerto_madero),max(sup_total_puerto_madero)+25,25),xlim=c(0,5000))
+barplot(sort(prop.table(table(habi_puerto_madero)),decreasing=TRUE))
+```
+En la superficie hay bastante pero solo algunos llegan a 1000 y 3 habitaciones son las mas frecuentes
+
+### Punto 3
+
+```{r}
+
+lista_De_superficies_totales<-list(sup_total_puerto_madero,sup_total_colegiales,
+                                   sup_total_boedo,sup_total_cen_mic,
+                                   sup_total_mataderos)
+saco_promedios<-function(bar1){
+  return(mean(bar1))
+}
+
+saco_desvio_standar<-function(bar2){
+  return(sd(bar2))
+}
+
+saco_mediana<-function(bar3){
+  return(median(bar3))
+}
+
+saco_cuartiles<-function(bar4){
+  return(quantile(bar4))
+}
+
+nombre_barrios_selec<- unique(datosTP2_barrios$l3)
+caracteriza<-c("Promedio","Desvio estandar","Mediana")
+cuar<-c("0%" ,"25%" ,"50%" ,"75%","100%" )
+
+punto3_tab <-matrix(NA,nrow=length(nombre_barrios_selec), ncol=length(c(caracteriza,saco_cuartiles(sup_total_mataderos))))
+colnames(punto3_tab)<-c(caracteriza,cuar)
+rownames(punto3_tab)<-nombre_barrios_selec
+
+vec_unido<-function(bar5){
+  vec_union_1<-c(saco_promedios(bar5),
+                 saco_desvio_standar(bar5),
+                 saco_mediana(bar5),
+                 saco_cuartiles(bar5))
+  return(vec_union_1)
+}
+
+punto_3 <- punto3_tab
+for (i_1 in 1:5) {
+      punto_3[i_1,]<-vec_unido(lista_De_superficies_totales[[i_1]])
+}
+punto_3
+```
+
+#### a) La mediana comparada con la media es igual ,eso quiere decir que la distribucion es acorde tanto en numeros usados y orden , porque  la mediana es el numero en medio de todo el "vector" y la media es el promedio [1,2,3] por ejemplo tiene 2 de mediana y 2 de media pero [1,6,5] es 6 la mediana y 4 la media
+
+#### b) entre los valores del desvio standar que serian entre 72,48 y 289,65 ,podriamos rendondera entre 72 y 290
+
+#### c) la propiedad mas grande es la de puerto madero que con un 100% de esta es 7971 total
+
+#### d) varia mas en mataderos
+
+
+### PUNTO 4
+```{r}
+boxplot(sup_total_boedo,outline=FALSE)
+boxplot(habi_boedo,outline=FALSE)
+```
+En la superficie nos muestra que entre 40 y 80-90 se encuentra los datos mas centrales(cerca a la mediana)
+y en habitaciones la mediana justamente cae al principio de boxplot diciendo que el numero entremedio de es distinto al
+percentil 50% quiere decir que la distribucion no es simetrica
+```{r}
+boxplot(sup_total_colegiales,outline=FALSE)
+boxplot(habi_colegiales,outline=FALSE)
+```
+Muy parecido a boedo pero solo aca la superficie ,el 25% va en 50 hasta 75% que es 100 y siendo meno justo con las medida
+
+```{r}
+boxplot(sup_total_cen_mic,outline=FALSE)
+boxplot(habi_cen_mic,outline=FALSE)
+```
+En el caso de la superficie muy similares a las anteriores pero en las habitaciones va de 1 a 3 con una mediana cerca de 2 podriamos suponer que son simetricos si solo observamos a ojo el grafico
+```{r}
+boxplot(sup_total_mataderos,outline=FALSE)
+boxplot(habi_mataderos,outline=FALSE)
+```
+En el caso de la superfie como habitaciones podemos decir que la mediana no coincide con la media
+
+```{r}
+boxplot(sup_total_puerto_madero,outline=FALSE)
+boxplot(habi_puerto_madero,outline=FALSE)
+```
+Aca podemos notar que la mediana esta en el 75% de la habitacion
+
+### PUNTO 5
+```{r}
+
+sc<-datosTP2_barrios$surface_covered
+rm<-datosTP2_barrios$rooms
+tamanio_promedio_habi<- sc / rm
+
+```
+## Relación entre el precio y las características de una propiedad
+
+### PUNTO 1)
+```{r}
+solo_dolar<-datosTP2_barrios$currency=="USD" & !is.na(datosTP2_barrios$currency)
+datosTP2_barrios_dolar<-datosTP2_barrios[solo_dolar,]
+#ahora todos son dolares
+fondo<-datosTP2_barrios_dolar$surface_total - datosTP2_barrios_dolar$surface_covered
+```
+### PUNTO 2)
+```{r}
+with(datosTP2_barrios_dolar,{
+plot(price,surface_total,log="xy")
+})
+with(datosTP2_barrios_dolar,{
+plot(price,surface_total)
+})
+
+```
+
+
+```{r}
+with(datosTP2_barrios_dolar,{
+plot(price,surface_covered,log="xy")
+})
+with(datosTP2_barrios_dolar,{
+plot(price,surface_covered)
+})
+
+```
+```{r}
+with(datosTP2_barrios_dolar,{
+plot(price,fondo,log="x")
+})
+with(datosTP2_barrios_dolar,{
+plot(price,fondo)
+})
+
+```
+```{r}
+
+sc_sin_dolar<-datosTP2_barrios_dolar$surface_covered
+rm_sin_dolar<-datosTP2_barrios_dolar$rooms
+tamanio_promedio_habi_sin_dolar<- sc_sin_dolar / rm_sin_dolar
+
+
+with(datosTP2_barrios_dolar,{
+plot(price,tamanio_promedio_habi_sin_dolar,log="xy")
+})
+
+with(datosTP2_barrios_dolar,{
+plot(price,tamanio_promedio_habi_sin_dolar)
+})
+```
+En la relacion entre cada variable puedo observar que no necesariamente por tener una superficie total o cubierta o muchas habitaciones implica que sea caro ,podes tener misma cantidad y mayor precio , en el fondo la superficie que no fue cubierta vale mucho por si misma.
+Log me permite ver distinto comportamiento y ser mejor visualizado que pasa en cierta zona del cuadro , y una tendencia general podria ser que sin el log la visualizacion queda muy aplanada diciendome poco de lo que ocurre
+
+### PUNTO 3)
+
+```{r}
+
+with(datosTP2_barrios_dolar,{
+  propiedades <-unique(l3)
+  colores<-rainbow(length(propiedades))
+  names(colores)<-propiedades
+  plot(surface_total,price,log="xy",col=alpha(colores[l3],0.2),pch=10)
+  legend("right",legend=propiedades,col=colores,pch=16)
+})
+```
+
+### PUNTO 4)
+```{r}
+with(datosTP2_barrios_dolar,{
+  propiedades <-unique(property_type)
+  colores<-rainbow(length(propiedades))
+  names(colores)<-propiedades
+  plot(surface_total,price,log="xy",col=alpha(colores[property_type],0.2),pch=10)
+  legend("right",legend=propiedades,col=colores,pch=16)
+})
+```
+Puedo observar que mayormente puerto madero es el lugar donde mas caro y barato sale incluso aunque tenga en promedio la misma
+superficie total aunque el mas bajo parece ser microcentro ,en cambio si hablamos de distintos tipos de propiedades en todos lados abundan los departamento con la misma o no cantidad de superficie puede variar mucho el precio
+
+
+## CONCLUSIONES
+Lo que aprendi del dataset es que no solo la cantidad de superficie hace depender el precio , la mediana no siempre es la media en las distintas columnas y que lo que abundan son los departamento como tipo de propiedades
